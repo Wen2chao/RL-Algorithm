@@ -111,7 +111,7 @@ class DDPG():
 
     def update(self, batch_size):
         state, action, reward, next_state, done = self.buffer.sample(batch_size)
-        next_action = self.target_actor_net(state).detach()
+        next_action = self.target_actor_net(next_state).detach()
 
         # critic loss
         value = self.critic_net(state, action)

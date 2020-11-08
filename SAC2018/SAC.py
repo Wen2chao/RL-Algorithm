@@ -143,7 +143,6 @@ class SAC:
         self.env = env
         self.state_dim = env.observation_space.shape[0]
         self.action_dim = env.action_space.shape[0]
-        self.action_range = [env.action_space.low, env.action_space.high]
 
         # hyperparameters
         self.gamma = gamma
@@ -171,8 +170,6 @@ class SAC:
 
     def get_action(self, state):
         action = self.policy_net.action(state)
-        action = action * (self.action_range[1] - self.action_range[0]) / 2.0 + \
-                 (self.action_range[1] + self.action_range[0]) / 2.0
 
         return action
 
@@ -198,6 +195,11 @@ class SAC:
         # Policy loss
         policy_loss = (log_prob - torch.min(new_q1_value, new_q2_value)).mean()
 
+        # Update Policy
+        self.policy_optimizer.zero_grad()
+        policy_loss.backward()
+        self.policy_optimizer.step()
+
         # Update v
         self.value_optimizer.zero_grad()
         value_loss.backward()
@@ -211,11 +213,6 @@ class SAC:
         self.q1_optimizer.step()
         self.q2_optimizer.step()
 
-        # Update Policy
-        self.policy_optimizer.zero_grad()
-        policy_loss.backward()
-        self.policy_optimizer.step()
-
         # Update target networks
         for target_param, param in zip(self.target_value_net.parameters(), self.value_net.parameters()):
             target_param.data.copy_(self.tau * param + (1 - self.tau) * target_param)
@@ -223,12 +220,17 @@ class SAC:
 
 def main(env, agent, Episode, batch_size):
     Return = []
+    action_range = [env.action_space.low, env.action_space.high]
+
     for episode in range(Episode):
         score = 0
         state = env.reset()
         for i in range(300):
             action = agent.get_action(state)
-            next_state, reward, done, _ = env.step(action)
+            # action output range[-1,1],expand to allowable range
+            action_in =  action * (action_range[1] - action_range[0]) / 2.0 +  (action_range[1] + action_range[0]) / 2.0
+
+            next_state, reward, done, _ = env.step(action_in)
             done_mask = 0.0 if done else 1.0
             agent.buffer.push((state, action, reward, next_state, done_mask))
             state = next_state
